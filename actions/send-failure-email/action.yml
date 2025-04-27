@@ -1,0 +1,64 @@
+name: Send Failure Email
+description: Envia un correo HTML si falla el workflow
+inputs:
+  to:
+    description: 'Correo destino'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Instalar msmtp
+      run: |
+        apt-get update
+        apt-get install -y msmtp msmtp-mta
+      shell: bash
+
+    - name: Configurar msmtp
+      run: |
+        echo "defaults" > ~/.msmtprc
+        echo "auth           on" >> ~/.msmtprc
+        echo "tls            on" >> ~/.msmtprc
+        echo "tls_trust_file /etc/ssl/certs/ca-certificates.crt" >> ~/.msmtprc
+        echo "account        default" >> ~/.msmtprc
+        echo "host           smtp.dondominio.com" >> ~/.msmtprc
+        echo "port           587" >> ~/.msmtprc
+        echo "from           ${{ inputs.from }}" >> ~/.msmtprc
+        echo "user           $SMTP_USERNAME" >> ~/.msmtprc
+        echo "password       $SMTP_PASSWORD" >> ~/.msmtprc
+        echo "logfile        ~/.msmtp.log" >> ~/.msmtprc
+        chmod 600 ~/.msmtprc
+      shell: bash
+
+    - name: Enviar email HTML
+      run: |
+        TO="${{ inputs.to }}"
+        FROM="ci@cobenia.com"
+        RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+        {
+          echo "From: ${FROM}"
+          echo "To: ${TO}"
+          echo "Subject: 🚨 Fallo en el workflow: ${GITHUB_WORKFLOW}"
+          echo "MIME-Version: 1.0"
+          echo "Content-Type: text/html; charset=UTF-8"
+          echo ""
+          echo "<html><body style='font-family: Arial, sans-serif; background-color: #f8f8f8; padding: 20px;'>"
+          echo "  <div style='background-color: #ff4d4d; color: white; padding: 15px; text-align: center; border-radius: 5px;'>"
+          echo "    <h1>🚨 ¡Fallo en el Workflow!</h1>"
+          echo "  </div>"
+          echo "  <div style='background-color: white; padding: 20px; margin-top: 10px; border-radius: 5px;'>"
+          echo "    <p><b>Repositorio:</b> ${GITHUB_REPOSITORY}</p>"
+          echo "    <p><b>Rama:</b> ${GITHUB_REF}</p>"
+          echo "    <p><b>Commit:</b> ${GITHUB_SHA}</p>"
+          echo "    <p><b>Workflow:</b> ${GITHUB_WORKFLOW}</p>"
+          echo "    <div style='text-align: center; margin: 30px 0;'>"
+          echo "      <a href='${RUN_URL}' style='background-color: #007bff; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px;'>"
+          echo "        Ver ejecución fallida"
+          echo "      </a>"
+          echo "    </div>"
+          echo "  </div>"
+          echo "  <p style='font-size: small; color: gray; margin-top: 20px; text-align: center;'>Este correo ha sido enviado automáticamente por GitHub Actions.</p>"
+          echo "</body></html>"
+        } | msmtp --debug -t
+      shell: bash
